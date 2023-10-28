@@ -1,0 +1,3 @@
+sysmon_event:
+  index_pattern: "wazuh-alerts-*"
+  since_date: "now-30m/m"
