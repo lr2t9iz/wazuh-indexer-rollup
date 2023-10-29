@@ -1,3 +1,14 @@
 sysmon_event:
+  # wazuh dashboard - filter (query)
   index_pattern: "wazuh-alerts-*"
-  since_date: "now-30m/m"
+  query: "agent.name:*"
+  fields: ["@timestamp", "agent.name", "agent.ip", "rule.id", "rule.level"]
+  # Number of days ago
+  until_ndays_ago: "1"
+  # @timestamp frequence(minutes) - required -> recommendation => 15
+  dt_hist: "15"
+  # event info 
+  # add tags: ["tag1", "tag2"]
+  add_tag: []
+  # add properties: set_col: { "field1": "value1", "field2": "value2" }
+  set_col: { }
