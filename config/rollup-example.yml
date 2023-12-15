@@ -1,7 +1,8 @@
 sysmon_event:
   # wazuh dashboard - filter (query)
   index_pattern: "wazuh-alerts-*"
-  query: "agent.name:*"
+  # DSL Query https://opensearch.org/docs/latest/query-dsl/index/
+  query: { "match_all": {  } }
   fields: ["@timestamp", "agent.name", "agent.ip", "rule.id", "rule.level"]
   # Number of days ago
   until_ndays_ago: "1"
