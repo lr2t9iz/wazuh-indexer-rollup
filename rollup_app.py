@@ -1,4 +1,5 @@
 from opensearchpy import OpenSearch
+from datetime import datetime, timedelta
 from dotenv import dotenv_values
 import pandas as pd
 import yaml
@@ -7,6 +8,7 @@ import requests
 import urllib3
 import time
 import json
+import sys
 
 def post_data(creds, params, data_agg):
     with OpenSearch(hosts = [{'host': creds['WI_HOST'], 'port': 9200}],
@@ -42,7 +44,7 @@ def agg_data(data_json, cfg_name, params):
     df.columns = [c.replace(".", "_") for c in df.columns]
     return  df.to_dict(orient='records')
 
-def get_data(creds, params):
+def get_data(creds, params, at, zt):
     db_docs_limit=600000 # set docs limit
     requests.put(f"https://{creds['WI_HOST']}:9200/{params['index_pattern']}/_settings",
                     auth=requests.auth.HTTPBasicAuth(creds['WI_USER'], creds['WI_PASS']), verify=False,
@@ -54,7 +56,7 @@ def get_data(creds, params):
         query = {
             "size": db_docs_limit,
             "_source": { "includes": params['fields'] },
-            "query": params['query']
+            "query": { "bool": { "filter": [ { "range": {"@timestamp": { "gte": at, "lt": zt } } }, params['filter'] ] } }
         }
         response = client.search(index=params['index_pattern'], body=query)['hits']['hits']
         return response
@@ -65,10 +67,20 @@ def main(configs="rollup.yml"):
     with open(f"{app_dir}/config/{configs}", "r") as yamlfile:
         confs = yaml.safe_load(yamlfile)
     for cfg_name, params in confs.items():
-        data_json = get_data(creds, params)
-        if len(data_json):
-            data_agg = agg_data(data_json, cfg_name, params)
-            post_data(creds, params, data_agg)
+        # until_ndays_ago
+        spec = "%Y-%m-%d"
+        since_date = datetime.today()-timedelta(days=params['until_ndays_ago'])
+        since_fdate = f"{str(since_date.strftime(spec))}"
+        # get and agg by hour
+        for i in range(0,23):
+            gte="{:02d}".format(i)
+            lt="{:02d}".format(i+1)
+            at = f"{since_fdate}T{gte}:00:00.000Z"
+            zt = f"{since_fdate}T{lt}:00:00.000Z"
+            data_json = get_data(creds, params, at, zt)
+            if len(data_json):
+                data_agg = agg_data(data_json, cfg_name, params)
+                post_data(creds, params, data_agg)
 
 if __name__=="__main__":
     urllib3.disable_warnings()
