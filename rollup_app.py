@@ -71,16 +71,17 @@ def main(configs="rollup.yml"):
         spec = "%Y-%m-%d"
         since_date = datetime.today()-timedelta(days=params['until_ndays_ago'])
         since_fdate = f"{str(since_date.strftime(spec))}"
-        # get and agg by hour
-        for i in range(0,23):
-            gte="{:02d}".format(i)
-            lt="{:02d}".format(i+1)
-            at = f"{since_fdate}T{gte}:00:00.000Z"
-            zt = f"{since_fdate}T{lt}:00:00.000Z"
+        # get, agg & post events by hour
+        for i in range(0,24):
+            time.sleet(30)
+            hh="{:02d}".format(i)
+            at = f"{since_fdate}T{hh}:00:00.000Z"
+            zt = f"{since_fdate}T{hh}:59:59.999Z"
             data_json = get_data(creds, params, at, zt)
             if len(data_json):
                 data_agg = agg_data(data_json, cfg_name, params)
                 post_data(creds, params, data_agg)
+        # delete event agg-ed
 
 if __name__=="__main__":
     urllib3.disable_warnings()
