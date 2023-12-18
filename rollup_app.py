@@ -22,11 +22,12 @@ def post_data(creds, params, data_agg, since_fdatei):
             event.update(params['set_col'])
             data2index = f"\n{json.dumps(index_header)}\n{json.dumps(event)}"
             data2bulk+=data2index
-            if aux_control % 1000 == 0:
+            if aux_control % 750 == 0:
                 client.bulk(data2bulk)
                 data2bulk=""
                 time.sleep(1)
             aux_control+=1
+        client.bulk(data2bulk)
 
 def agg_data(data_json, cfg_name, params):
     df = pd.json_normalize(data_json, max_level=10)
@@ -43,9 +44,9 @@ def agg_data(data_json, cfg_name, params):
     df.columns = [c.replace(".", "_") for c in df.columns]
     return  df.to_dict(orient='records')
 
-def get_data(creds, params, at, zt):
+def get_data(creds, params, at, zt, since_fdatei):
     db_docs_limit=600000 # set docs limit
-    requests.put(f"https://{creds['WI_HOST']}:9200/{params['index_pattern']}/_settings",
+    requests.put(f"https://{creds['WI_HOST']}:9200/{params['index_pattern']}{since_fdatei}/_settings",
                     auth=requests.auth.HTTPBasicAuth(creds['WI_USER'], creds['WI_PASS']), verify=False,
                     json={"index":{"max_result_window":db_docs_limit}})
 
@@ -57,7 +58,7 @@ def get_data(creds, params, at, zt):
             "_source": { "includes": params['fields'] },
             "query": { "bool": { "filter": [ { "range": {"@timestamp": { "gte": at, "lte": zt } } }, params['filter'] ] } }
         }
-        response = client.search(index=params['index_pattern'], body=query)['hits']['hits']
+        response = client.search(index=f"{params['index_pattern']}{since_fdatei}", body=query)['hits']['hits']
         return response
 
 def main(configs="rollup.yml"):
@@ -68,21 +69,21 @@ def main(configs="rollup.yml"):
     for cfg_name, params in confs.items():
         # until_ndays_ago
         since_date = datetime.today()-timedelta(days=params['until_ndays_ago'])
-        since_fdate = f"{str(since_date.strftime("%Y-%m-%d"))}"
-        since_fdatei = f"{str(since_date.strftime("%Y.%m.%d"))}"
+        since_fdate = f"{str(since_date.strftime('%Y-%m-%d'))}"
+        since_fdatei = f"{str(since_date.strftime('%Y.%m.%d'))}"
         # get, agg & post events by hour
         for i in range(0,24):
-            time.sleep(30)
             hh="{:02d}".format(i)
             at = f"{since_fdate}T{hh}:00:00.000Z"
             zt = f"{since_fdate}T{hh}:59:59.999Z"
             #print("get data")
-            data_json = get_data(creds, params, at, zt)
+            data_json = get_data(creds, params, at, zt, since_fdatei)
             if len(data_json):
                 #print("agg data")
                 data_agg = agg_data(data_json, cfg_name, params)
                 #print("post data")
                 post_data(creds, params, data_agg, since_fdatei)
+            time.sleep(30)
         # delete event agg-ed
 
 if __name__=="__main__":
